@@ -175,32 +175,13 @@ fun GalleryAllScreen(
     val density = LocalDensity.current
     val edgeThresholdPx = with(density) { 90.dp.toPx() }
 
-    val mediaPositionMap = remember(groupedMedia) {
-        val map = mutableMapOf<String, MediaGridPosition>()
-        var currentGlobalRow = 0
-        groupedMedia.values.forEachIndexed { groupIdx, itemsInGroup ->
-            val chunks = itemsInGroup.chunked(3)
-            chunks.forEachIndexed { rowIdx, rowItems ->
-                val rowCount = rowItems.size
-                rowItems.forEachIndexed { colIdx, (item, _) ->
-                    map[item.id] = MediaGridPosition(
-                        id = item.id,
-                        groupIndex = groupIdx,
-                        rowInGroup = rowIdx,
-                        colInRow = colIdx,
-                        rowItemCount = rowCount,
-                        globalRow = currentGlobalRow
-                    )
-                }
-                currentGlobalRow++
-            }
-        }
-        map
+    val mediaIndexMap = remember(flatMediaItems) {
+        flatMediaItems.mapIndexed { index, item -> item.id to index }.toMap()
     }
 
     fun updateDragSelection(currentRootPos: Offset) {
         val startId = dragStartId ?: return
-        val posA = mediaPositionMap[startId] ?: return
+        val startIndex = mediaIndexMap[startId] ?: return
 
         val targetId = itemBounds.entries.firstOrNull { it.value.contains(currentRootPos) }?.key
             ?: itemBounds.entries.minByOrNull { entry ->
@@ -214,81 +195,14 @@ fun GalleryAllScreen(
             }?.key
             ?: return
 
-        val posB = mediaPositionMap[targetId] ?: return
+        val targetIndex = mediaIndexMap[targetId] ?: return
 
-        val minRow = minOf(posA.globalRow, posB.globalRow)
-        val maxRow = maxOf(posA.globalRow, posB.globalRow)
+        val minIdx = minOf(startIndex, targetIndex)
+        val maxIdx = maxOf(startIndex, targetIndex)
 
-        val isTargetAtRowEnd = (posB.colInRow == posB.rowItemCount - 1)
-        val isStartAtRowEnd = (posA.colInRow == posA.rowItemCount - 1)
-
-        val newSelection = mutableSetOf<String>()
-
-        mediaPositionMap.values.forEach { pos ->
-            val r = pos.globalRow
-            if (r < minRow || r > maxRow) return@forEach
-
-            if (posA.globalRow == posB.globalRow) {
-                // 같은 행 내에서 드래그
-                if (isTargetAtRowEnd) {
-                    // 맨 끝 파일에 닿았을 때만 행 전체 연속선택
-                    newSelection.add(pos.id)
-                } else if (isStartAtRowEnd) {
-                    if (pos.colInRow in posB.colInRow..posA.colInRow) newSelection.add(pos.id)
-                } else {
-                    val minCol = minOf(posA.colInRow, posB.colInRow)
-                    val maxCol = maxOf(posA.colInRow, posB.colInRow)
-                    if (pos.colInRow in minCol..maxCol) newSelection.add(pos.id)
-                }
-            } else if (posA.globalRow < posB.globalRow) {
-                // 아래 방향으로 드래그
-                val colRange = minOf(posA.colInRow, posB.colInRow)..maxOf(posA.colInRow, posB.colInRow)
-                if (r == posB.globalRow) {
-                    // 현재 도달한 행: 맨 끝 파일에 닿았을 때만 행 전체 선택
-                    if (isTargetAtRowEnd) {
-                        newSelection.add(pos.id)
-                    } else {
-                        if (pos.colInRow in colRange) newSelection.add(pos.id)
-                    }
-                } else if (r == posA.globalRow) {
-                    // 시작 행
-                    if (isTargetAtRowEnd || isStartAtRowEnd) {
-                        if (pos.colInRow >= posA.colInRow) newSelection.add(pos.id)
-                    } else {
-                        if (pos.colInRow in colRange) newSelection.add(pos.id)
-                    }
-                } else {
-                    // 중간 행들
-                    if (isTargetAtRowEnd || isStartAtRowEnd) {
-                        newSelection.add(pos.id)
-                    } else {
-                        if (pos.colInRow in colRange) newSelection.add(pos.id)
-                    }
-                }
-            } else {
-                // 위 방향으로 드래그
-                val colRange = minOf(posA.colInRow, posB.colInRow)..maxOf(posA.colInRow, posB.colInRow)
-                if (r == posB.globalRow) {
-                    if (isTargetAtRowEnd) {
-                        newSelection.add(pos.id)
-                    } else {
-                        if (pos.colInRow in colRange) newSelection.add(pos.id)
-                    }
-                } else if (r == posA.globalRow) {
-                    if (isTargetAtRowEnd || isStartAtRowEnd) {
-                        if (pos.colInRow <= posA.colInRow) newSelection.add(pos.id)
-                    } else {
-                        if (pos.colInRow in colRange) newSelection.add(pos.id)
-                    }
-                } else {
-                    if (isTargetAtRowEnd || isStartAtRowEnd) {
-                        newSelection.add(pos.id)
-                    } else {
-                        if (pos.colInRow in colRange) newSelection.add(pos.id)
-                    }
-                }
-            }
-        }
+        val newSelection = (minIdx..maxIdx).mapNotNull { idx ->
+            flatMediaItems.getOrNull(idx)?.id
+        }.toSet()
 
         selectedItemIds.value = dragInitialSelection + newSelection
     }
