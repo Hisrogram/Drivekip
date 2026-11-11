@@ -1,0 +1,16 @@
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+/app/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+drivekip.jks
+*.keystore
+github_token.txt
+HL_Company_SSE.cer
+cacerts
