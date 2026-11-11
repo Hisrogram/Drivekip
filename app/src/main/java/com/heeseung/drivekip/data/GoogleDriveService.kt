@@ -146,7 +146,9 @@ class GoogleDriveService(
         response.use { res ->
             if (!res.isSuccessful) throw IOException("프로젝트 목록 조회 실패: ${res.code}")
             val body = res.body?.string() ?: ""
-            parseDriveItems(body)
+            parseDriveItems(body).filter { 
+                !it.name.startsWith("_") && !it.name.equals("_AppUpdate", ignoreCase = true) 
+            }
         }
     }
 

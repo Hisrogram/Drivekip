@@ -42,9 +42,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.FlashAuto
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
@@ -357,20 +360,22 @@ fun CameraScreen(
             }
         }
 
-        // Top Control Bar
-        Column(
+        // Top Control Bar (Single-line, horizontally scrollable)
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .align(Alignment.TopCenter)
-                .background(Color.Black.copy(alpha = 0.55f))
-                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .align(Alignment.TopCenter),
+            color = Color.Black.copy(alpha = 0.65f)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Project Selector Chip (Only real projects, or "+신규프로젝트 생성")
+                // 1. Project Selector Chip (Only real projects, or "+신규프로젝트 생성")
                 Box {
                     Surface(
                         modifier = Modifier
@@ -380,14 +385,14 @@ fun CameraScreen(
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
                                 text = if (currentProjectName.isNotBlank()) "📁 $currentProjectName ▼" else "📁 프로젝트 선택 ▼",
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
+                                fontSize = 12.sp
                             )
                         }
                     }
@@ -427,118 +432,128 @@ fun CameraScreen(
                     }
                 }
 
-                // Controls: Flash, Watermark, AspectRatio, Quality, Grid
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Flash Toggle
-                    IconButton(onClick = {
+                // 2. Compact Galaxy Native Camera Button
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            if (currentProjectName.isBlank()) {
+                                Toast.makeText(context, "프로젝트를 먼저 선택해 주세요.", Toast.LENGTH_SHORT).show()
+                                return@clickable
+                            }
+                            val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.KOREA).format(Date())
+                            val fName = "IMG_${currentProjectName}_${timeStamp}.jpg"
+                            val temp = File(context.cacheDir, fName)
+                            nativeTempFile = temp
+                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                context,
+                                "com.heeseung.drivekip.fileprovider",
+                                temp
+                            )
+                            nativeCameraLauncher.launch(uri)
+                        },
+                    color = Color(0xFF2E7D32).copy(alpha = 0.85f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 5.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.ElectricBolt,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "기본카메라",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // 3. Flash Toggle
+                IconButton(
+                    onClick = {
                         flashMode = when (flashMode) {
                             ImageCapture.FLASH_MODE_AUTO -> ImageCapture.FLASH_MODE_ON
                             ImageCapture.FLASH_MODE_ON -> ImageCapture.FLASH_MODE_OFF
                             else -> ImageCapture.FLASH_MODE_AUTO
                         }
                         imageCapture?.flashMode = flashMode
-                    }) {
-                        val icon = when (flashMode) {
-                            ImageCapture.FLASH_MODE_ON -> Icons.Default.FlashOn
-                            ImageCapture.FLASH_MODE_AUTO -> Icons.Default.FlashAuto
-                            else -> Icons.Default.FlashOff
-                        }
-                        Icon(icon, contentDescription = "플래시", tint = Color.White)
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    val icon = when (flashMode) {
+                        ImageCapture.FLASH_MODE_ON -> Icons.Default.FlashOn
+                        ImageCapture.FLASH_MODE_AUTO -> Icons.Default.FlashAuto
+                        else -> Icons.Default.FlashOff
                     }
+                    Icon(icon, contentDescription = "플래시", tint = Color.White, modifier = Modifier.size(20.dp))
+                }
 
-                    // Aspect Ratio Toggle (4:3 / 16:9)
-                    Surface(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .clickable {
-                                currentRatio = if (currentRatio == CameraRatio.RATIO_4_3) {
-                                    CameraRatio.RATIO_16_9
-                                } else {
-                                    CameraRatio.RATIO_4_3
-                                }
-                            },
-                        color = Color.White.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(6.dp)
-                    ) {
-                        Text(
-                            text = currentRatio.label,
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                        )
-                    }
+                // 4. Aspect Ratio Toggle (4:3 / 16:9)
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable {
+                            currentRatio = if (currentRatio == CameraRatio.RATIO_4_3) {
+                                CameraRatio.RATIO_16_9
+                            } else {
+                                CameraRatio.RATIO_4_3
+                            }
+                        },
+                    color = Color.White.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = currentRatio.label,
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                    )
+                }
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                // 5. Quality Selector
+                IconButton(
+                    onClick = { showQualityDialog = true },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(Icons.Default.HighQuality, contentDescription = "화질", tint = Color.White, modifier = Modifier.size(20.dp))
+                }
 
-                    // Quality Selector
-                    IconButton(onClick = { showQualityDialog = true }) {
-                        Icon(Icons.Default.HighQuality, contentDescription = "화질", tint = Color.White)
-                    }
+                // 6. Watermark Toggle
+                Surface(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { isWatermarkEnabled = !isWatermarkEnabled },
+                    color = if (isWatermarkEnabled) GreenPrimary else Color.Gray.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = if (isWatermarkEnabled) "워터마크 ON" else "워터마크 OFF",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                    )
+                }
 
-                    // Watermark Toggle
-                    Surface(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { isWatermarkEnabled = !isWatermarkEnabled },
-                        color = if (isWatermarkEnabled) GreenPrimary else Color.Gray.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = if (isWatermarkEnabled) "워터마크 ON" else "워터마크 OFF",
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                        )
-                    }
-
-                    // Grid Toggle
-                    IconButton(onClick = { isGridEnabled = !isGridEnabled }) {
-                        Icon(
-                            Icons.Default.GridOn,
-                            contentDescription = "격자",
-                            tint = if (isGridEnabled) Color(0xFF4ADE80) else Color.White.copy(alpha = 0.6f)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    // Switch to Galaxy Native Camera Button in Top Bar
-                    Surface(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                if (currentProjectName.isBlank()) {
-                                    Toast.makeText(context, "프로젝트를 먼저 선택해 주세요.", Toast.LENGTH_SHORT).show()
-                                    return@clickable
-                                }
-                                val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.KOREA).format(Date())
-                                val fName = "IMG_${currentProjectName}_${timeStamp}.jpg"
-                                val temp = File(context.cacheDir, fName)
-                                nativeTempFile = temp
-                                val uri = androidx.core.content.FileProvider.getUriForFile(
-                                    context,
-                                    "com.heeseung.drivekip.fileprovider",
-                                    temp
-                                )
-                                nativeCameraLauncher.launch(uri)
-                            },
-                        color = Color.Black.copy(alpha = 0.55f),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp)
-                        ) {
-                            Text(
-                                text = "⚡기본카메라",
-                                color = Color(0xFF4ADE80),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                // 7. Grid Toggle
+                IconButton(
+                    onClick = { isGridEnabled = !isGridEnabled },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        Icons.Default.GridOn,
+                        contentDescription = "격자",
+                        tint = if (isGridEnabled) Color(0xFF4ADE80) else Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }

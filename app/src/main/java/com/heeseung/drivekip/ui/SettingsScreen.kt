@@ -341,7 +341,14 @@ fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Info, contentDescription = null, tint = GreenPrimary)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("DriveKip v1.4.0", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        val versionName = remember {
+                            try {
+                                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.5.0"
+                            } catch (e: Exception) {
+                                "1.5.0"
+                            }
+                        }
+                        Text("DriveKip v$versionName", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(

@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -139,6 +142,108 @@ fun ProjectGalleryScreen(
 
     val groupedMedia = remember(mediaList) {
         mediaList.groupBy { it.formattedDate }
+    }
+
+    val gridState = rememberLazyGridState()
+    var gridHeightPx by remember { mutableFloatStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+    var currentDragY by remember { mutableStateOf<Float?>(null) }
+    var lastDragOffset by remember { mutableStateOf<Offset?>(null) }
+    var dragStartId by remember { mutableStateOf<String?>(null) }
+    var dragInitialSelection by remember { mutableStateOf(setOf<String>()) }
+
+    val density = LocalDensity.current
+    val edgeThresholdPx = with(density) { 90.dp.toPx() }
+
+    val mediaPositionMap = remember(groupedMedia) {
+        val map = mutableMapOf<String, MediaGridPosition>()
+        var currentGlobalRow = 0
+        groupedMedia.values.forEachIndexed { groupIdx, itemsInGroup ->
+            val chunks = itemsInGroup.chunked(3)
+            chunks.forEachIndexed { rowIdx, rowItems ->
+                val rowCount = rowItems.size
+                rowItems.forEachIndexed { colIdx, item ->
+                    map[item.id] = MediaGridPosition(
+                        id = item.id,
+                        groupIndex = groupIdx,
+                        rowInGroup = rowIdx,
+                        colInRow = colIdx,
+                        rowItemCount = rowCount,
+                        globalRow = currentGlobalRow
+                    )
+                }
+                currentGlobalRow++
+            }
+        }
+        map
+    }
+
+    fun updateDragSelection(currentRootPos: Offset) {
+        val startId = dragStartId ?: return
+        val posA = mediaPositionMap[startId] ?: return
+
+        val targetId = itemBounds.entries.firstOrNull { it.value.contains(currentRootPos) }?.key
+            ?: itemBounds.entries.minByOrNull { entry ->
+                val rect = entry.value
+                val cx = (rect.left + rect.right) / 2
+                val cy = (rect.top + rect.bottom) / 2
+                (cx - currentRootPos.x) * (cx - currentRootPos.x) + (cy - currentRootPos.y) * (cy - currentRootPos.y)
+            }?.takeIf { entry ->
+                val rect = entry.value
+                currentRootPos.y in (rect.top - 150f)..(rect.bottom + 150f)
+            }?.key
+            ?: return
+
+        val posB = mediaPositionMap[targetId] ?: return
+
+        val startRow = minOf(posA.globalRow, posB.globalRow)
+        val endRow = maxOf(posA.globalRow, posB.globalRow)
+
+        val newSelection = mutableSetOf<String>()
+
+        mediaPositionMap.values.forEach { pos ->
+            if (pos.globalRow in (startRow + 1) until endRow) {
+                newSelection.add(pos.id)
+            } else if (startRow == endRow && pos.globalRow == startRow) {
+                if (posA.colInRow <= posB.colInRow) {
+                    if (pos.colInRow >= posA.colInRow) newSelection.add(pos.id)
+                } else {
+                    if (pos.colInRow <= posA.colInRow) newSelection.add(pos.id)
+                }
+            } else if (pos.globalRow == startRow) {
+                if (posA.globalRow == startRow) {
+                    if (pos.colInRow >= posA.colInRow) newSelection.add(pos.id)
+                } else {
+                    newSelection.add(pos.id)
+                }
+            } else if (pos.globalRow == endRow) {
+                if (posA.globalRow == endRow) {
+                    if (pos.colInRow <= posA.colInRow) newSelection.add(pos.id)
+                } else {
+                    newSelection.add(pos.id)
+                }
+            }
+        }
+
+        selectedItemIds.value = dragInitialSelection + newSelection
+    }
+
+    LaunchedEffect(isDragging, currentDragY, gridHeightPx) {
+        if (isDragging && currentDragY != null && gridHeightPx > 0f) {
+            while (isDragging) {
+                val y = currentDragY ?: break
+                if (y > gridHeightPx - edgeThresholdPx) {
+                    val ratio = ((y - (gridHeightPx - edgeThresholdPx)) / edgeThresholdPx).coerceIn(0.2f, 2.5f)
+                    gridState.scrollBy(ratio * 28f)
+                    lastDragOffset?.let { updateDragSelection(gridOffsetInRoot + it) }
+                } else if (y < edgeThresholdPx) {
+                    val ratio = ((edgeThresholdPx - y) / edgeThresholdPx).coerceIn(0.2f, 2.5f)
+                    gridState.scrollBy(-ratio * 28f)
+                    lastDragOffset?.let { updateDragSelection(gridOffsetInRoot + it) }
+                }
+                kotlinx.coroutines.delay(16)
+            }
+        }
     }
 
     Scaffold(
@@ -313,23 +418,49 @@ fun ProjectGalleryScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .onGloballyPositioned { coordinates ->
                     gridOffsetInRoot = coordinates.positionInRoot()
+                    gridHeightPx = coordinates.size.height.toFloat()
                 }
                 .pointerInput(mediaList.size) {
                     detectDragGesturesAfterLongPress(
                         onDragStart = { localOffset ->
                             val rootPos = gridOffsetInRoot + localOffset
                             val hitId = itemBounds.entries.firstOrNull { it.value.contains(rootPos) }?.key
+                                ?: itemBounds.entries.minByOrNull { entry ->
+                                    val rect = entry.value
+                                    val cx = (rect.left + rect.right) / 2
+                                    val cy = (rect.top + rect.bottom) / 2
+                                    (cx - rootPos.x) * (cx - rootPos.x) + (cy - rootPos.y) * (cy - rootPos.y)
+                                }?.takeIf { entry ->
+                                    val rect = entry.value
+                                    rootPos.y in (rect.top - 120f)..(rect.bottom + 120f)
+                                }?.key
+
                             if (hitId != null) {
                                 isSelectionMode = true
-                                selectedItemIds.value = selectedItemIds.value + hitId
+                                dragStartId = hitId
+                                dragInitialSelection = selectedItemIds.value
+                                isDragging = true
+                                currentDragY = localOffset.y
+                                lastDragOffset = localOffset
+                                updateDragSelection(rootPos)
                             }
                         },
                         onDrag = { change, _ ->
-                            val rootPos = gridOffsetInRoot + change.position
-                            val hitId = itemBounds.entries.firstOrNull { it.value.contains(rootPos) }?.key
-                            if (hitId != null && !selectedItemIds.value.contains(hitId)) {
-                                selectedItemIds.value = selectedItemIds.value + hitId
-                            }
+                            currentDragY = change.position.y
+                            lastDragOffset = change.position
+                            updateDragSelection(gridOffsetInRoot + change.position)
+                        },
+                        onDragEnd = {
+                            isDragging = false
+                            currentDragY = null
+                            lastDragOffset = null
+                            dragStartId = null
+                        },
+                        onDragCancel = {
+                            isDragging = false
+                            currentDragY = null
+                            lastDragOffset = null
+                            dragStartId = null
                         }
                     )
                 }
@@ -353,6 +484,7 @@ fun ProjectGalleryScreen(
             } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
+                    state = gridState,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 8.dp),
@@ -445,6 +577,12 @@ fun ProjectGalleryScreen(
                         Spacer(modifier = Modifier.height(120.dp))
                     }
                 }
+
+                FastScroller(
+                    gridState = gridState,
+                    totalItemCount = mediaList.size + groupedMedia.size,
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                )
             }
 
             if (isOperating) {
