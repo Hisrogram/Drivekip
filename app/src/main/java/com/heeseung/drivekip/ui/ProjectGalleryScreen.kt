@@ -196,31 +196,76 @@ fun ProjectGalleryScreen(
 
         val posB = mediaPositionMap[targetId] ?: return
 
-        val startRow = minOf(posA.globalRow, posB.globalRow)
-        val endRow = maxOf(posA.globalRow, posB.globalRow)
+        val minRow = minOf(posA.globalRow, posB.globalRow)
+        val maxRow = maxOf(posA.globalRow, posB.globalRow)
+
+        val isTargetAtRowEnd = (posB.colInRow == posB.rowItemCount - 1)
+        val isStartAtRowEnd = (posA.colInRow == posA.rowItemCount - 1)
 
         val newSelection = mutableSetOf<String>()
 
         mediaPositionMap.values.forEach { pos ->
-            if (pos.globalRow in (startRow + 1) until endRow) {
-                newSelection.add(pos.id)
-            } else if (startRow == endRow && pos.globalRow == startRow) {
-                if (posA.colInRow <= posB.colInRow) {
-                    if (pos.colInRow >= posA.colInRow) newSelection.add(pos.id)
-                } else {
-                    if (pos.colInRow <= posA.colInRow) newSelection.add(pos.id)
-                }
-            } else if (pos.globalRow == startRow) {
-                if (posA.globalRow == startRow) {
-                    if (pos.colInRow >= posA.colInRow) newSelection.add(pos.id)
-                } else {
+            val r = pos.globalRow
+            if (r < minRow || r > maxRow) return@forEach
+
+            if (posA.globalRow == posB.globalRow) {
+                // 같은 행 내에서 드래그
+                if (isTargetAtRowEnd) {
+                    // 맨 끝 파일에 닿았을 때만 행 전체 연속선택
                     newSelection.add(pos.id)
-                }
-            } else if (pos.globalRow == endRow) {
-                if (posA.globalRow == endRow) {
-                    if (pos.colInRow <= posA.colInRow) newSelection.add(pos.id)
+                } else if (isStartAtRowEnd) {
+                    if (pos.colInRow in posB.colInRow..posA.colInRow) newSelection.add(pos.id)
                 } else {
-                    newSelection.add(pos.id)
+                    val minCol = minOf(posA.colInRow, posB.colInRow)
+                    val maxCol = maxOf(posA.colInRow, posB.colInRow)
+                    if (pos.colInRow in minCol..maxCol) newSelection.add(pos.id)
+                }
+            } else if (posA.globalRow < posB.globalRow) {
+                // 아래 방향으로 드래그
+                val colRange = minOf(posA.colInRow, posB.colInRow)..maxOf(posA.colInRow, posB.colInRow)
+                if (r == posB.globalRow) {
+                    // 현재 도달한 행: 맨 끝 파일에 닿았을 때만 행 전체 선택
+                    if (isTargetAtRowEnd) {
+                        newSelection.add(pos.id)
+                    } else {
+                        if (pos.colInRow in colRange) newSelection.add(pos.id)
+                    }
+                } else if (r == posA.globalRow) {
+                    // 시작 행
+                    if (isTargetAtRowEnd || isStartAtRowEnd) {
+                        if (pos.colInRow >= posA.colInRow) newSelection.add(pos.id)
+                    } else {
+                        if (pos.colInRow in colRange) newSelection.add(pos.id)
+                    }
+                } else {
+                    // 중간 행들
+                    if (isTargetAtRowEnd || isStartAtRowEnd) {
+                        newSelection.add(pos.id)
+                    } else {
+                        if (pos.colInRow in colRange) newSelection.add(pos.id)
+                    }
+                }
+            } else {
+                // 위 방향으로 드래그
+                val colRange = minOf(posA.colInRow, posB.colInRow)..maxOf(posA.colInRow, posB.colInRow)
+                if (r == posB.globalRow) {
+                    if (isTargetAtRowEnd) {
+                        newSelection.add(pos.id)
+                    } else {
+                        if (pos.colInRow in colRange) newSelection.add(pos.id)
+                    }
+                } else if (r == posA.globalRow) {
+                    if (isTargetAtRowEnd || isStartAtRowEnd) {
+                        if (pos.colInRow <= posA.colInRow) newSelection.add(pos.id)
+                    } else {
+                        if (pos.colInRow in colRange) newSelection.add(pos.id)
+                    }
+                } else {
+                    if (isTargetAtRowEnd || isStartAtRowEnd) {
+                        newSelection.add(pos.id)
+                    } else {
+                        if (pos.colInRow in colRange) newSelection.add(pos.id)
+                    }
                 }
             }
         }

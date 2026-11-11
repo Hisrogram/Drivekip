@@ -91,6 +91,8 @@ fun SettingsScreen(
     var showCustomUrlDialog by remember { mutableStateOf(false) }
     var customUrlInput by remember { mutableStateOf(appSettings.updateCheckUrl) }
 
+    var showPlayProtectDialog by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -380,6 +382,19 @@ fun SettingsScreen(
                             fontSize = 11.sp
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    TextButton(
+                        onClick = { showPlayProtectDialog = true },
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text(
+                            text = "💡 '무시하고 설치' / Play 프로텍트 검사 창 끄는 법",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
 
@@ -461,6 +476,37 @@ fun SettingsScreen(
             dismissButton = {
                 TextButton(onClick = { showCustomUrlDialog = false }) {
                     Text("취소")
+                }
+            }
+        )
+    }
+
+    if (showPlayProtectDialog) {
+        AlertDialog(
+            onDismissRequest = { showPlayProtectDialog = false },
+            title = { Text("Play 프로텍트 검사 창 끄기") },
+            text = {
+                Column {
+                    Text(
+                        "Google Play 스토어를 거치지 않고 직접 설치/업데이트되는 앱은 구글 보안 정책상 '무시하고 설치' 또는 '검사' 팝업이 기본 발생합니다.\n\n" +
+                        "매번 이 창을 띄우지 않고 즉시 설치하려면 갤럭시 기기에서 아래 설정을 1회만 변경해 주세요:\n\n" +
+                        "1. 스마트폰 [Play 스토어] 앱 실행\n" +
+                        "2. 우측 상단 [내 프로필 아이콘] 터치\n" +
+                        "3. [Play 프로텍트] 메뉴 터치\n" +
+                        "4. 우측 상단 ⚙️ (설정) 아이콘 터치\n" +
+                        "5. '보안 위협 앱 감지 개선' (알 수 없는 앱을 Google로 전송) 항목을 [OFF (해제)]로 변경\n\n" +
+                        "위 설정을 끄시면 앞으로 DriveKip 업데이트 시 차단/검사 알림 없이 바로 설치 대화상자로 직행합니다.",
+                        fontSize = 12.sp,
+                        lineHeight = 18.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showPlayProtectDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)
+                ) {
+                    Text("확인")
                 }
             }
         )
